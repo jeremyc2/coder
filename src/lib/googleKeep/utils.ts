@@ -124,24 +124,6 @@ export function timestampToDate(
 	return new Date(numeric / 1000);
 }
 
-function yamlScalar(value: string): string {
-	return JSON.stringify(value);
-}
-
-function yamlArray({
-	name,
-	values,
-}: {
-	name: string;
-	values: string[];
-}): string[] {
-	if (values.length === 0) {
-		return [];
-	}
-
-	return [`${name}:`, ...values.map((value) => `  - ${yamlScalar(value)}`)];
-}
-
 function slugify(value: string): string {
 	return (
 		value
@@ -316,39 +298,41 @@ export function frontmatter({
 }): string {
 	// Match either `/` or `\` so the original filename can be extracted on any platform.
 	const originalFile = sourcePath.split(/[/\\]/).at(-1) ?? sourcePath;
-	const lines = [
-		"---",
-		`title: ${yamlScalar(title)}`,
-		"source: google-keep",
-		`original_file: ${yamlScalar(originalFile)}`,
-	];
+	const data: Record<string, unknown> = {
+		title,
+		source: "google-keep",
+		original_file: originalFile,
+	};
 
 	const createdAt = timestampToIso(note.createdTimestampUsec);
 	if (createdAt) {
-		lines.push(`created_at: ${yamlScalar(createdAt)}`);
+		data["created_at"] = createdAt;
 	}
 
 	const updatedAt = timestampToIso(note.userEditedTimestampUsec);
 	if (updatedAt) {
-		lines.push(`updated_at: ${yamlScalar(updatedAt)}`);
+		data["updated_at"] = updatedAt;
 	}
 
 	const trashedAt = timestampToIso(note.trashedTimestampUsec);
 	if (trashedAt) {
-		lines.push(`trashed_at: ${yamlScalar(trashedAt)}`);
+		data["trashed_at"] = trashedAt;
 	}
 
 	if (note.color) {
-		lines.push(`color: ${yamlScalar(note.color)}`);
+		data["color"] = note.color;
 	}
 
-	lines.push(`pinned: ${note.isPinned === true ? "true" : "false"}`);
-	lines.push(`archived: ${note.isArchived === true ? "true" : "false"}`);
-	lines.push(`trashed: ${note.isTrashed === true ? "true" : "false"}`);
-	lines.push(...yamlArray({ name: "labels", values: getLabels(note) }));
-	lines.push("---", "");
+	data["pinned"] = note.isPinned === true;
+	data["archived"] = note.isArchived === true;
+	data["trashed"] = note.isTrashed === true;
 
-	return lines.join("\n");
+	const labels = getLabels(note);
+	if (labels.length > 0) {
+		data["labels"] = labels;
+	}
+
+	return `---\n${Bun.YAML.stringify(data).trimEnd()}\n---\n\n`;
 }
 
 export function buildMarkdownBody({
