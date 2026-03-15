@@ -12,7 +12,8 @@
 		"build": "bun --bun vite build",
 		"typecheck": "tsgo",
 		"check:staged": "bun --bun biome check --write --staged",
-		"check": "bun --bun biome check --write"
+		"check": "bun --bun biome check --write",
+		"prepare": "effect-tsgo patch"
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.3.0",
@@ -37,11 +38,12 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.7",
 		"@effect/language-service": "^0.80.0",
+		"@effect/tsgo": "0.0.5",
 		"@types/bun": "^1.3.10",
 		"@types/node": "^25.5.0",
 		"@types/react": "^19.2.14",
 		"@types/react-dom": "^19.2.3",
-		"@typescript/native-preview": "^7.0.0-dev.20260314.1",
+		"@typescript/native-preview": "^7.0.0-dev.20260315.1",
 		"@vitejs/plugin-react": "^6.0.1",
 		"vite": "^8.0.0",
 		"vite-plugin-pwa": "^1.2.0"
