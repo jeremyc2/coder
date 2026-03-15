@@ -1,10 +1,13 @@
 #!/usr/bin/env bun
 
-import { BunServices } from "@effect/platform-bun";
+import { BunRuntime, BunServices } from "@effect/platform-bun";
 import { Console, Effect, Schema } from "effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Path from "effect/Path";
 import { Command, Flag } from "effect/unstable/cli";
+import { vaultScriptLayer } from "../src/lib/effect/layers";
+import {
+	FileOperationError,
+	VaultFileSystem,
+} from "../src/lib/effect/services/VaultFileSystem";
 
 type KeepLabel = {
 	name?: string;
@@ -60,16 +63,6 @@ class ImportValidationError extends Schema.TaggedErrorClass<ImportValidationErro
 	},
 ) {}
 
-class FileOperationError extends Schema.TaggedErrorClass<FileOperationError>()(
-	"FileOperationError",
-	{
-		operation: Schema.String,
-		path: Schema.String,
-		cause: Schema.String,
-		code: Schema.optional(Schema.String),
-	},
-) {}
-
 const VERSION = "0.0.1";
 const DEFAULT_OUTPUT_DIR = "private/knowledge-base/keep";
 const DEFAULT_ASSETS_DIR_NAME = "_assets";
@@ -98,36 +91,36 @@ const command = Command.make(
 			),
 		),
 	},
-	Effect.fnUntraced(function* (args) {
-		const path = yield* Path.Path;
-		const inputDir = path.resolve(process.cwd(), args.input);
-		const outputDir = path.resolve(process.cwd(), args.output);
-		const inputStats = yield* statOptional({ filePath: inputDir });
+	Effect.fn("importGoogleKeepCommand")(function* (args): Effect.fn.Return<
+		void,
+		ImportValidationError | FileOperationError,
+		VaultFileSystem
+	> {
+		const fileSystem = yield* VaultFileSystem;
+		const inputDir = fileSystem.resolveFromCwd(args.input);
+		const outputDir = fileSystem.resolveFromCwd(args.output);
+		const inputStats = yield* fileSystem.statOptional(inputDir);
 
 		if (!inputStats || inputStats.type !== "Directory") {
-			yield* Effect.fail(
-				new ImportValidationError({
-					message: "Input directory does not exist",
-					path: inputDir,
-				}),
-			);
+			return yield* new ImportValidationError({
+				message: "Input directory does not exist",
+				path: inputDir,
+			});
 		}
 
-		const sourceFiles = (yield* walkFiles(inputDir))
+		const sourceFiles = (yield* listFilesRecursively(fileSystem, inputDir))
 			.filter(isKeepJsonFile)
 			.sort();
 
 		if (sourceFiles.length === 0) {
-			yield* Effect.fail(
-				new ImportValidationError({
-					message: "No JSON files found in input directory",
-					path: inputDir,
-				}),
-			);
+			return yield* new ImportValidationError({
+				message: "No JSON files found in input directory",
+				path: inputDir,
+			});
 		}
 
 		if (!args.dryRun) {
-			yield* mkdirEffect(outputDir);
+			yield* fileSystem.makeDirectory(outputDir, { recursive: true });
 		}
 
 		const usedOutputPaths = new Set<string>();
@@ -137,7 +130,7 @@ const command = Command.make(
 		const skipDetails: string[] = [];
 
 		for (const sourceFile of sourceFiles) {
-			const result = yield* readKeepNote(sourceFile);
+			const result = yield* readKeepNote(fileSystem, sourceFile);
 			if (!result.note) {
 				skippedCount += 1;
 				skipDetails.push(`${sourceFile}: ${result.skipReason}`);
@@ -145,23 +138,28 @@ const command = Command.make(
 			}
 			const note = result.note;
 
-			const sourceBaseName = path.basename(
+			const sourceBaseName = fileSystem.basename(
 				sourceFile,
-				path.extname(sourceFile),
+				fileSystem.extname(sourceFile),
 			);
 			const title = fallbackTitle({ note, sourceBasename: sourceBaseName });
 			const outputPath = uniqueFilePath({
-				path,
+				fileSystem,
 				targetDir: outputDir,
 				desiredBaseName: title,
 				usedPaths: usedOutputPaths,
 			});
-			const noteSlug = path.basename(outputPath, ".md");
-			const outputAssetsDir = path.join(outputDir, args.assetsDir, noteSlug);
-			const outputAssetsDirName = path
+			const noteSlug = fileSystem.basename(outputPath, ".md");
+			const outputAssetsDir = fileSystem.join(
+				outputDir,
+				args.assetsDir,
+				noteSlug,
+			);
+			const outputAssetsDirName = fileSystem
 				.join(args.assetsDir, noteSlug)
-				.replaceAll(path.sep, "/");
+				.replaceAll(fileSystem.pathSeparator, "/");
 			const attachments = yield* resolveAttachments({
+				fileSystem,
 				note,
 				jsonPath: sourceFile,
 				outputAssetsDir,
@@ -177,11 +175,11 @@ const command = Command.make(
 			].join("");
 
 			if (!args.dryRun) {
-				yield* writeTextFile({ filePath: outputPath, contents: markdown });
+				yield* fileSystem.writeFileString(outputPath, markdown);
 
 				const editedAt = timestampToDate(note.userEditedTimestampUsec);
 				if (editedAt) {
-					yield* touchFile({ filePath: outputPath, at: editedAt });
+					yield* fileSystem.utimes(outputPath, editedAt, editedAt);
 				}
 			}
 
@@ -584,194 +582,13 @@ function getErrorMessage(error: unknown): string {
 	return String(error);
 }
 
-/** Pulls a string error code out of an unknown error value when present. Joke: codependent in a healthy way. */
-function getErrorCode(error: unknown): string | undefined {
-	if (
-		typeof error === "object" &&
-		error !== null &&
-		"code" in error &&
-		typeof error.code === "string"
-	) {
-		return error.code;
-	}
-
-	return undefined;
-}
-
-/** Wraps low-level failures in a structured file operation error. Joke: file and order restored. */
-function toFileOperationError({
-	operation,
-	filePath,
-	error,
-}: {
-	operation: string;
-	filePath: string;
-	error: unknown;
-}): FileOperationError {
-	return new FileOperationError({
-		operation,
-		path: filePath,
-		cause: getErrorMessage(error),
-		code: getErrorCode(error),
-	});
-}
-
-/** Creates a directory recursively inside an Effect. Joke: making space, literally. */
-const mkdirEffect = (directory: string) =>
-	Effect.fnUntraced(function* () {
-		const fs = yield* FileSystem.FileSystem;
-		return yield* fs.makeDirectory(directory, { recursive: true }).pipe(
-			Effect.mapError((error) =>
-				toFileOperationError({
-					operation: "mkdir",
-					filePath: directory,
-					error,
-				}),
-			),
-		);
-	})();
-
-/** Stats a path and softens missing-path errors into null. Joke: no stats? no tantrum. */
-const statOptional = ({ filePath }: { filePath: string }) =>
-	Effect.fnUntraced(function* () {
-		const fs = yield* FileSystem.FileSystem;
-		const exists = yield* fs.exists(filePath).pipe(
-			Effect.mapError((error) =>
-				toFileOperationError({
-					operation: "exists",
-					filePath,
-					error,
-				}),
-			),
-		);
-
-		if (!exists) {
-			return null;
-		}
-
-		return yield* fs
-			.stat(filePath)
-			.pipe(
-				Effect.mapError((error) =>
-					toFileOperationError({ operation: "stat", filePath, error }),
-				),
-			);
-	})();
-
-/** Writes text content to disk inside an Effect. Joke: write on target. */
-const writeTextFile = ({
-	filePath,
-	contents,
-}: {
-	filePath: string;
-	contents: string;
-}) =>
-	Effect.fnUntraced(function* () {
-		const fs = yield* FileSystem.FileSystem;
-		return yield* fs
-			.writeFileString(filePath, contents)
-			.pipe(
-				Effect.mapError((error) =>
-					toFileOperationError({ operation: "write", filePath, error }),
-				),
-			);
-	})();
-
-/** Copies a file using Bun inside an Effect. Joke: copy that, over and out. */
-const copyFileWithBun = ({
-	sourcePath,
-	outputPath,
-}: {
-	sourcePath: string;
-	outputPath: string;
-}) =>
-	Effect.fnUntraced(function* () {
-		const fs = yield* FileSystem.FileSystem;
-		return yield* fs.copyFile(sourcePath, outputPath).pipe(
-			Effect.mapError((error) =>
-				toFileOperationError({
-					operation: "copy",
-					filePath: `${sourcePath} -> ${outputPath}`,
-					error,
-				}),
-			),
-		);
-	})();
-
-/** Removes a file or directory path inside an Effect. Joke: deleting it softly. */
-const removePath = ({
-	filePath,
-	recursive = false,
-	force = false,
-}: {
-	filePath: string;
-	recursive?: boolean;
-	force?: boolean;
-}) =>
-	Effect.fnUntraced(function* () {
-		const fs = yield* FileSystem.FileSystem;
-		return yield* fs
-			.remove(filePath, { recursive, force })
-			.pipe(
-				Effect.mapError((error) =>
-					toFileOperationError({ operation: "remove", filePath, error }),
-				),
-			);
-	})();
-
-/** Applies access and modified timestamps to a file. Joke: a touching update. */
-const touchFile = ({ filePath, at }: { filePath: string; at: Date }) =>
-	Effect.fnUntraced(function* () {
-		const fs = yield* FileSystem.FileSystem;
-		return yield* fs
-			.utimes(filePath, at, at)
-			.pipe(
-				Effect.mapError((error) =>
-					toFileOperationError({ operation: "utimes", filePath, error }),
-				),
-			);
-	})();
-
-/** Reads and parses a JSON file using Bun. Joke: JSON and on and on. */
-const readJsonFile = (filePath: string) =>
-	Effect.fnUntraced(function* () {
-		const fs = yield* FileSystem.FileSystem;
-		const contents = yield* fs
-			.readFileString(filePath)
-			.pipe(
-				Effect.mapError((error) =>
-					toFileOperationError({ operation: "read-json", filePath, error }),
-				),
-			);
-
-		return yield* Effect.try({
-			try: () => Schema.decodeUnknownSync(JsonValueFromString)(contents),
-			catch: (error) =>
-				toFileOperationError({ operation: "parse-json", filePath, error }),
-		});
-	})();
-
-/** Recursively lists files under a directory using Bun globbing. Joke: taking the scenic root. */
-const walkFiles = (
+const listFilesRecursively = Effect.fn("listFilesRecursively")(function* (
+	fileSystem: VaultFileSystem["Service"],
 	rootDir: string,
-): Effect.Effect<
-	string[],
-	FileOperationError,
-	FileSystem.FileSystem | Path.Path
-> =>
-	Effect.fnUntraced(function* () {
-		const fs = yield* FileSystem.FileSystem;
-		const path = yield* Path.Path;
-		const entries = yield* fs
-			.readDirectory(rootDir, { recursive: true })
-			.pipe(
-				Effect.mapError((error) =>
-					toFileOperationError({ operation: "scan", filePath: rootDir, error }),
-				),
-			);
-
-		return entries.map((filePath) => path.join(rootDir, filePath));
-	})();
+) {
+	const entries = yield* fileSystem.readDirectory(rootDir, { recursive: true });
+	return entries.map((filePath) => fileSystem.join(rootDir, filePath));
+});
 
 /** Checks whether a scanned file looks like a Keep note JSON file. Joke: extension audition passed. */
 function isKeepJsonFile(filePath: string): boolean {
@@ -786,66 +603,70 @@ function isAttachmentCandidate(filePath: string): boolean {
 }
 
 /** Reads a Keep JSON file and parses it into a note when possible. Joke: note sure? now we are. */
-const readKeepNote = (filePath: string) =>
-	readJsonFile(filePath).pipe(
-		Effect.map((value): ReadKeepNoteResult => {
-			const note = parseKeepNote(value);
-			if (note) {
-				return { note };
-			}
+const readKeepNote = Effect.fn("readKeepNote")(function* (
+	fileSystem: VaultFileSystem["Service"],
+	filePath: string,
+) {
+	const contents = yield* fileSystem.readFileString(filePath);
+	const value = yield* Effect.try({
+		try: () => Schema.decodeUnknownSync(JsonValueFromString)(contents),
+		catch: (error) =>
+			new FileOperationError({
+				operation: "parse-json",
+				path: filePath,
+				cause: getErrorMessage(error),
+			}),
+	});
 
-			return {
-				skipReason: explainSkippedKeepNote(value),
-			};
-		}),
-	);
+	const note = parseKeepNote(value);
+	if (note) {
+		return { note } satisfies ReadKeepNoteResult;
+	}
+
+	return {
+		skipReason: explainSkippedKeepNote(value),
+	} satisfies ReadKeepNoteResult;
+});
 
 /** Finds and copies attachments associated with a Keep note export. Joke: attached, but not clingy. */
 const resolveAttachments = ({
+	fileSystem,
 	note,
 	jsonPath,
 	outputAssetsDir,
 	outputAssetsDirName,
 	dryRun,
 }: {
+	fileSystem: VaultFileSystem["Service"];
 	note: KeepNote;
 	jsonPath: string;
 	outputAssetsDir: string;
 	outputAssetsDirName: string;
 	dryRun: boolean;
-}): Effect.Effect<
-	ResolvedAttachment[],
-	FileOperationError,
-	FileSystem.FileSystem | Path.Path
-> =>
-	Effect.fnUntraced(function* () {
-		const fs = yield* FileSystem.FileSystem;
-		const path = yield* Path.Path;
-		const keepDir = path.dirname(jsonPath);
-		const sourceStem = path.basename(jsonPath, path.extname(jsonPath));
+}) =>
+	Effect.fn("resolveAttachments")(function* () {
+		const keepDir = fileSystem.dirname(jsonPath);
+		const sourceStem = fileSystem.basename(
+			jsonPath,
+			fileSystem.extname(jsonPath),
+		);
 		const explicitAttachments = (note.attachments ?? [])
 			.map((attachment) => attachment.filePath)
 			.filter((attachmentPath): attachmentPath is string =>
 				Boolean(attachmentPath),
 			)
-			.map((attachmentPath) => path.resolve(keepDir, attachmentPath));
+			.map((attachmentPath) =>
+				fileSystem.resolveFromCwd(fileSystem.join(keepDir, attachmentPath)),
+			);
 
-		const siblingAttachments = (yield* fs.readDirectory(keepDir).pipe(
-			Effect.mapError((error) =>
-				toFileOperationError({
-					operation: "read-directory",
-					filePath: keepDir,
-					error,
-				}),
-			),
-		))
-			.map((entry) => path.join(keepDir, entry))
+		const siblingAttachments = (yield* fileSystem.readDirectory(keepDir))
+			.map((entry) => fileSystem.join(keepDir, entry))
 			.filter((filePath) => {
 				if (filePath === jsonPath) {
 					return false;
 				}
 
-				const basename = path.basename(filePath);
+				const basename = fileSystem.basename(filePath);
 				return (
 					(basename.startsWith(`${sourceStem}.`) ||
 						basename.startsWith(`${sourceStem} `)) &&
@@ -853,11 +674,13 @@ const resolveAttachments = ({
 				);
 			});
 
-		const nestedDir = path.join(keepDir, sourceStem);
-		const nestedDirStats = yield* statOptional({ filePath: nestedDir });
+		const nestedDir = fileSystem.join(keepDir, sourceStem);
+		const nestedDirStats = yield* fileSystem.statOptional(nestedDir);
 		const nestedAttachments =
 			nestedDirStats?.type === "Directory"
-				? (yield* walkFiles(nestedDir)).filter(isAttachmentCandidate)
+				? (yield* listFilesRecursively(fileSystem, nestedDir)).filter(
+						isAttachmentCandidate,
+					)
 				: [];
 
 		const seen = new Set<string>();
@@ -866,7 +689,7 @@ const resolveAttachments = ({
 			...siblingAttachments,
 			...nestedAttachments,
 		].filter((filePath) => {
-			const normalized = path.normalize(filePath);
+			const normalized = fileSystem.normalize(filePath);
 			if (seen.has(normalized)) {
 				return false;
 			}
@@ -876,23 +699,22 @@ const resolveAttachments = ({
 
 		const attachments: ResolvedAttachment[] = [];
 		if (!dryRun) {
-			yield* removePath({
-				filePath: outputAssetsDir,
+			yield* fileSystem.remove(outputAssetsDir, {
 				recursive: true,
 				force: true,
 			});
 		}
 
 		for (const attachmentPath of attachmentPaths) {
-			const attachmentBasename = path.basename(attachmentPath);
-			const outputPath = path.join(outputAssetsDir, attachmentBasename);
-			const outputRelativePath = path
+			const attachmentBasename = fileSystem.basename(attachmentPath);
+			const outputPath = fileSystem.join(outputAssetsDir, attachmentBasename);
+			const outputRelativePath = fileSystem
 				.join(outputAssetsDirName, attachmentBasename)
-				.replaceAll(path.sep, "/");
+				.replaceAll(fileSystem.pathSeparator, "/");
 
 			if (!dryRun) {
-				yield* mkdirEffect(outputAssetsDir);
-				yield* copyFileWithBun({ sourcePath: attachmentPath, outputPath });
+				yield* fileSystem.makeDirectory(outputAssetsDir, { recursive: true });
+				yield* fileSystem.copyFile(attachmentPath, outputPath);
 			}
 
 			attachments.push({
@@ -906,22 +728,22 @@ const resolveAttachments = ({
 
 /** Generates a unique markdown file path for a note title slug. Joke: uniqueness is filename property. */
 function uniqueFilePath({
-	path,
+	fileSystem,
 	targetDir,
 	desiredBaseName,
 	usedPaths,
 }: {
-	path: Path.Path;
+	fileSystem: VaultFileSystem["Service"];
 	targetDir: string;
 	desiredBaseName: string;
 	usedPaths: Set<string>;
 }): string {
 	const safeBase = slugify(desiredBaseName) || "keep-note";
-	let candidate = path.join(targetDir, `${safeBase}.md`);
+	let candidate = fileSystem.join(targetDir, `${safeBase}.md`);
 	let suffix = 2;
 
 	while (usedPaths.has(candidate)) {
-		candidate = path.join(targetDir, `${safeBase}-${suffix}.md`);
+		candidate = fileSystem.join(targetDir, `${safeBase}-${suffix}.md`);
 		suffix += 1;
 	}
 
@@ -929,22 +751,10 @@ function uniqueFilePath({
 	return candidate;
 }
 
-try {
-	await Effect.runPromise(
-		Command.runWith(command, { version: VERSION })(process.argv.slice(2)).pipe(
-			Effect.provide(BunServices.layer),
-		),
-	);
-} catch (error) {
-	if (
-		typeof error === "object" &&
-		error !== null &&
-		"_tag" in error &&
-		typeof error._tag === "string"
-	) {
-		console.error(`Import failed: ${JSON.stringify(error, null, 2)}`);
-	} else {
-		console.error(`Import failed: ${getErrorMessage(error)}`);
-	}
-	process.exit(1);
-}
+const importProgram = Command.runWith(command, { version: VERSION })(
+	process.argv.slice(2),
+)
+	.pipe(Effect.provide(vaultScriptLayer))
+	.pipe(Effect.provide(BunServices.layer));
+
+BunRuntime.runMain(importProgram);

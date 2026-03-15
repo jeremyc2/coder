@@ -194,10 +194,9 @@ const rules: Rule[] = [
 
 export function classifyKnowledgeNote(note: KnowledgeNoteSeed): CategoryMatch {
 	const totals = new Map<string, { score: number; reasons: string[] }>();
-	const fallbackCategory = categoryDefinitions[categoryDefinitions.length - 1];
-	if (!fallbackCategory) {
-		throw new Error("At least one category definition is required.");
-	}
+	const fallbackCategory =
+		categoryDefinitions[categoryDefinitions.length - 1] ??
+		categoryDefinitions[0];
 
 	for (const rule of rules) {
 		if (!rule.test(note)) {
@@ -215,7 +214,10 @@ export function classifyKnowledgeNote(note: KnowledgeNoteSeed): CategoryMatch {
 	)[0] ?? ["scratchpad", { score: 1, reasons: ["used fallback bucket"] }];
 
 	return {
-		category: categoryByName.get(categoryName) ?? fallbackCategory,
+		category:
+			categoryByName.get(categoryName) ??
+			fallbackCategory ??
+			categoryDefinitions[0],
 		score: outcome.score,
 		reasons: outcome.reasons,
 	};
