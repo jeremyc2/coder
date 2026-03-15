@@ -113,6 +113,7 @@ const rules: Rule[] = [
 		reason: "matched explicit scripture-study label",
 		test: (note) =>
 			note.labels.some((label) =>
+				// Match a few explicit spiritual-study labels that strongly determine the category.
 				/(scripture study|devotional|church|seminary)/i.test(label),
 			),
 	},
@@ -122,6 +123,7 @@ const rules: Rule[] = [
 		reason: "matched gospel and scripture language",
 		test: (note) =>
 			matchText(
+				// Match scripture terms, faith language, and LDS vocabulary that strongly imply spiritual study.
 				/\b(jesus christ|gospel|temple|book of mormon|scripture|pray(?:er)?|faith|church|conference|elder|sacrament|revelation|apostasy|covenant|lds|mormon)\b/i,
 				note,
 			),
@@ -132,6 +134,7 @@ const rules: Rule[] = [
 		reason: "matched family and relationship language",
 		test: (note) =>
 			matchText(
+				// Match family names and relationship terms that usually indicate personal or family notes.
 				/\b(bella|luca|bruno|mozzie|family|marriage|spouse|wife|husband|wedding|date ideas?|parent|parenting|kids?|child|friend|loneliness|divorce)\b/i,
 				note,
 			),
@@ -142,6 +145,7 @@ const rules: Rule[] = [
 		reason: "matched household, errands, or food language",
 		test: (note) =>
 			matchText(
+				// Match food, errands, maintenance, vehicles, and day-to-day logistics language.
 				/\b(meal|recipe|grocery|toast|tomatoes?|pizza|cauliflower|shampoo|dish soap|oat milk|house|apartment|maintenance|stairs|garage|electric|fiber|pest|car|trip|travel|things to do|adventure)\b/i,
 				note,
 			),
@@ -152,6 +156,7 @@ const rules: Rule[] = [
 		reason: "matched credentials or account records",
 		test: (note) =>
 			matchText(
+				// Match account, credential, payroll, insurance, and record-keeping vocabulary.
 				/\b(password|username|pin|account|login|icloud|venmo|fidelity|arvest|payroll|budget|salary|insurance|deductible|loan|mailing address|address|vin|title|claim)\b/i,
 				note,
 			),
@@ -162,6 +167,7 @@ const rules: Rule[] = [
 		reason: "matched software or work topics",
 		test: (note) =>
 			matchText(
+				// Match engineering tools, frontend terms, and work-related technical vocabulary.
 				/\b(react|css|grid|rust|repo|github|api|frontend|view transition|code|developer|interview|m science|work pin|byod|servor|effect|tanstack)\b/i,
 				note,
 			),
@@ -172,6 +178,7 @@ const rules: Rule[] = [
 		reason: "matched media, politics, history, or cultural topics",
 		test: (note) =>
 			matchText(
+				// Match media, politics, religion, and history keywords that fit broader culture or ideas notes.
 				/\b(netflix|max|movie|show|book|music|art|quote|politic|republican|biden|climate|afghanistan|islam|atheism|amendment|history|newsroom)\b/i,
 				note,
 			),
@@ -181,7 +188,9 @@ const rules: Rule[] = [
 		score: 4,
 		reason: "matched saved external reference link",
 		test: (note) =>
+			// Match an `http://` or `https://` prefix when the title is effectively just a saved link.
 			/^https?:\/\//i.test(note.title) ||
+			// Match the same URL prefix when the body is essentially a raw link capture.
 			/^https?:\/\//i.test(note.body.trim()),
 	},
 	{
