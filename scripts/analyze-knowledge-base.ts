@@ -8,10 +8,10 @@
  * before reindexing or changing collection definitions.
  */
 
-import { BunRuntime, BunServices } from "@effect/platform-bun";
+import { BunRuntime } from "@effect/platform-bun";
 import { Effect } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
-import { vaultScriptLayer } from "../src/lib/effect/layers";
+import { vaultScriptRuntimeLayer } from "../src/lib/effect/layers";
 import {
 	AnalyzeKnowledgeBase,
 	type AnalyzeKnowledgeBaseArgs,
@@ -47,8 +47,7 @@ const command = Command.make(
 
 const analyzeProgram = command.pipe(
 	Command.run({ version: "0.0.1" }),
-	Effect.provide(vaultScriptLayer),
-	Effect.provide(BunServices.layer),
+	Effect.provide(vaultScriptRuntimeLayer),
 );
 
 BunRuntime.runMain(analyzeProgram);

@@ -8,10 +8,10 @@
  * before writing files.
  */
 
-import { BunRuntime, BunServices } from "@effect/platform-bun";
+import { BunRuntime } from "@effect/platform-bun";
 import { Effect } from "effect";
 import { Command, Flag } from "effect/unstable/cli";
-import { vaultScriptLayer } from "../src/lib/effect/layers";
+import { vaultScriptRuntimeLayer } from "../src/lib/effect/layers";
 import {
 	ImportGoogleKeep,
 	type ImportGoogleKeepArgs,
@@ -63,6 +63,6 @@ const command = Command.make(
 
 const importProgram = Command.runWith(command, { version: VERSION })(
 	process.argv.slice(2),
-).pipe(Effect.provide(vaultScriptLayer), Effect.provide(BunServices.layer));
+).pipe(Effect.provide(vaultScriptRuntimeLayer));
 
 BunRuntime.runMain(importProgram);

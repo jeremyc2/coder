@@ -8,35 +8,44 @@ import { KnowledgeNotes } from "./services/KnowledgeNotes";
 import { QmdBridge } from "./services/QmdBridge";
 import { VaultFileSystem } from "./services/VaultFileSystem";
 
-const knowledgeNotesLayer = KnowledgeNotes.layer.pipe(
-	Layer.provide(VaultFileSystem.layer),
-	Layer.provide(FrontmatterParser.layer),
+const frontmatterParserLayer = FrontmatterParser.layer;
+
+const vaultFileSystemLayer = VaultFileSystem.layer.pipe(
+	Layer.provide(BunServices.layer),
 );
 
+const knowledgeNotesLayer = KnowledgeNotes.layer.pipe(
+	Layer.provide([vaultFileSystemLayer, frontmatterParserLayer]),
+);
+
+export const qmdBridgeLayer = QmdBridge.layer;
+
 const buildQmdIndexLayer = BuildQmdIndex.layer.pipe(
-	Layer.provide(VaultFileSystem.layer),
-	Layer.provide(knowledgeNotesLayer),
-	Layer.provide(QmdBridge.layer),
+	Layer.provide([vaultFileSystemLayer, knowledgeNotesLayer, qmdBridgeLayer]),
 );
 
 const analyzeKnowledgeBaseLayer = AnalyzeKnowledgeBase.layer.pipe(
-	Layer.provide(VaultFileSystem.layer),
-	Layer.provide(knowledgeNotesLayer),
+	Layer.provide([vaultFileSystemLayer, knowledgeNotesLayer]),
 );
 
 const importGoogleKeepLayer = ImportGoogleKeep.layer.pipe(
-	Layer.provide(VaultFileSystem.layer),
+	Layer.provide(vaultFileSystemLayer),
 );
 
 export const vaultScriptLayer = Layer.mergeAll(
-	BunServices.layer,
-	FrontmatterParser.layer,
-	VaultFileSystem.layer,
+	frontmatterParserLayer,
+	vaultFileSystemLayer,
 	knowledgeNotesLayer,
-	QmdBridge.layer,
+	qmdBridgeLayer,
 	buildQmdIndexLayer,
 	analyzeKnowledgeBaseLayer,
 	importGoogleKeepLayer,
 );
 
-export const qmdBridgeLayer = Layer.mergeAll(QmdBridge.layer);
+export const qmdBridgeRuntimeLayer = qmdBridgeLayer.pipe(
+	Layer.provideMerge(BunServices.layer),
+);
+
+export const vaultScriptRuntimeLayer = vaultScriptLayer.pipe(
+	Layer.provideMerge(BunServices.layer),
+);
