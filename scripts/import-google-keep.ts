@@ -73,6 +73,7 @@ class FileOperationError extends Schema.TaggedErrorClass<FileOperationError>()(
 const VERSION = "0.0.1";
 const DEFAULT_OUTPUT_DIR = "private/knowledge-base/keep";
 const DEFAULT_ASSETS_DIR_NAME = "_assets";
+const JsonValueFromString = Schema.fromJsonString(Schema.Unknown);
 
 const command = Command.make(
 	"import-google-keep",
@@ -744,7 +745,7 @@ const readJsonFile = (filePath: string) =>
 			);
 
 		return yield* Effect.try({
-			try: () => JSON.parse(contents),
+			try: () => Schema.decodeUnknownSync(JsonValueFromString)(contents),
 			catch: (error) =>
 				toFileOperationError({ operation: "parse-json", filePath, error }),
 		});
