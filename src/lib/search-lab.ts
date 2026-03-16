@@ -161,8 +161,9 @@ export async function loadSearchLabData(
 		errors.push(overviewResult.error);
 	}
 
-	const itemsResult = await (search.query
-		? searchVaultNotes({
+	const itemsRequest = search.query
+		? {
+				kind: "search",
 				data: {
 					query: search.query,
 					collection: search.collection || undefined,
@@ -171,6 +172,18 @@ export async function loadSearchLabData(
 					minScore: search.minScore,
 					explain: search.explain,
 				},
+			}
+		: {
+				kind: "browse",
+				data: {
+					collection: search.collection || undefined,
+					limit: search.limit,
+				},
+			};
+
+	const itemsResult = await (search.query
+		? searchVaultNotes({
+				data: itemsRequest.data,
 			}).then((result) =>
 				result.ok
 					? result.data.map(
@@ -187,10 +200,7 @@ export async function loadSearchLabData(
 					: result,
 			)
 		: browseVaultNotes({
-				data: {
-					collection: search.collection || undefined,
-					limit: search.limit,
-				},
+				data: itemsRequest.data,
 			}).then((result) =>
 				result.ok
 					? result.data.map(

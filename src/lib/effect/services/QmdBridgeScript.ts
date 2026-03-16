@@ -1,3 +1,5 @@
+import { accessSync, constants, realpathSync } from "node:fs";
+import { delimiter, join } from "node:path";
 import { createStore, type QMDStore } from "@tobilu/qmd";
 import { Effect, Layer, Schema, ServiceMap, Stream } from "effect";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
@@ -14,6 +16,7 @@ const queryHelperScript = new URL(
 	import.meta.url,
 ).pathname;
 const workspaceRoot = new URL("../../../../", import.meta.url).pathname;
+const explicitNodeBinary = process.env["QMD_NODE_BINARY"];
 
 const QueryHelperResultsSchema = Schema.fromJsonString(
 	Schema.Array(
@@ -36,6 +39,58 @@ export class BridgeStoreError extends Schema.TaggedErrorClass<BridgeStoreError>(
 	},
 ) {}
 
+function isExecutableFile(pathLike: string): boolean {
+	try {
+		accessSync(pathLike, constants.X_OK);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function isBunBackedBinary(pathLike: string): boolean {
+	return (
+		pathLike.endsWith("/bun") ||
+		pathLike.includes("/.bun/") ||
+		pathLike.includes("/private/tmp/bun-node-")
+	);
+}
+
+function resolveNodeBinaryPath(): string | undefined {
+	if (explicitNodeBinary && isExecutableFile(explicitNodeBinary)) {
+		const resolvedExplicitBinary = realpathSync(explicitNodeBinary);
+
+		if (!isBunBackedBinary(resolvedExplicitBinary)) {
+			return resolvedExplicitBinary;
+		}
+	}
+
+	const pathValue = process.env["PATH"];
+
+	if (!pathValue) {
+		return undefined;
+	}
+
+	for (const segment of pathValue.split(delimiter)) {
+		if (!segment) {
+			continue;
+		}
+
+		const candidate = join(segment, "node");
+
+		if (isExecutableFile(candidate)) {
+			const resolvedCandidate = realpathSync(candidate);
+
+			if (isBunBackedBinary(resolvedCandidate)) {
+				continue;
+			}
+
+			return resolvedCandidate;
+		}
+	}
+
+	return undefined;
+}
 export type BridgeOverviewArgs = {
 	limitPerCollection: number;
 };
@@ -98,6 +153,7 @@ export class QmdBridgeScript extends ServiceMap.Service<
 		QmdBridgeScript,
 		Effect.gen(function* () {
 			const spawner = yield* ChildProcessSpawner;
+			const nodeBinaryPath = resolveNodeBinaryPath();
 
 			const withStore = Effect.fn("QmdBridgeScript.withStore")(function* <T>(
 				fn: (store: QMDStore) => Effect.Effect<T, BridgeStoreError>,
@@ -139,7 +195,6 @@ export class QmdBridgeScript extends ServiceMap.Service<
 										}),
 								}).pipe(Effect.orDie),
 						);
-
 						yield* Effect.tryPromise({
 							try: () => store.setGlobalContext(qmdGlobalContext),
 							catch: (error) =>
@@ -149,7 +204,6 @@ export class QmdBridgeScript extends ServiceMap.Service<
 										error instanceof Error ? error.message : String(error),
 								}),
 						});
-
 						for (const collection of qmdCollectionEntries) {
 							yield* Effect.tryPromise({
 								try: () =>
@@ -193,7 +247,6 @@ export class QmdBridgeScript extends ServiceMap.Service<
 									}),
 							}),
 						]);
-
 						const latestDocuments = yield* Effect.try({
 							try: () =>
 								store.internal.db
@@ -231,7 +284,6 @@ export class QmdBridgeScript extends ServiceMap.Service<
 										error instanceof Error ? error.message : String(error),
 								}),
 						});
-
 						return { status, collections, latestDocuments };
 					}),
 				);
@@ -255,7 +307,6 @@ export class QmdBridgeScript extends ServiceMap.Service<
 										error instanceof Error ? error.message : String(error),
 								}),
 						});
-
 						return results.map((result) => ({
 							docid: result.docid,
 							title: result.title,
@@ -280,6 +331,14 @@ export class QmdBridgeScript extends ServiceMap.Service<
 				mode: "query" | "vsearch",
 				args: BridgeQueryArgs | BridgeVectorSearchArgs,
 			): Effect.fn.Return<unknown, BridgeStoreError> {
+				if (!nodeBinaryPath) {
+					return yield* new BridgeStoreError({
+						operation: `${mode}-resolve-node-binary`,
+						message:
+							"Unable to resolve a Node binary from QMD_NODE_BINARY or PATH.",
+					});
+				}
+
 				const commandArgs = [
 					queryHelperScript,
 					"--mode",
@@ -305,7 +364,7 @@ export class QmdBridgeScript extends ServiceMap.Service<
 				const [stdout, stderr, exitCode] = yield* Effect.scoped(
 					Effect.gen(function* () {
 						const child = yield* spawner.spawn(
-							ChildProcess.make("node", commandArgs, {
+							ChildProcess.make(nodeBinaryPath, commandArgs, {
 								cwd: workspaceRoot,
 							}),
 						);
@@ -425,7 +484,6 @@ export class QmdBridgeScript extends ServiceMap.Service<
 										error instanceof Error ? error.message : String(error),
 								}),
 						});
-
 						return documents.map((document) => ({
 							collectionName: document.collectionName,
 							displayPath: document.path,
@@ -456,7 +514,6 @@ export class QmdBridgeScript extends ServiceMap.Service<
 										error instanceof Error ? error.message : String(error),
 								}),
 						});
-
 						if ("error" in document) {
 							return {
 								found: false,
@@ -516,7 +573,6 @@ export class QmdBridgeScript extends ServiceMap.Service<
 										error instanceof Error ? error.message : String(error),
 								}),
 						});
-
 						return {
 							updateResult,
 							embedResult,

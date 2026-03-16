@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+
 /**
  * Provides a small process boundary around QMD store operations for the app
  * and other scripts.

@@ -170,26 +170,12 @@ async function runQmdBridgeResult<
 				error instanceof Error && error.stack ? error.stack : String(error);
 
 			if (error instanceof QmdBridgeError) {
-				console.error("[qmd-server]", {
-					command: error.command,
-					payload,
-					message: error.message,
-					details,
-				});
-
 				return {
 					command: error.command,
 					message: error.message,
 					details,
 				};
 			}
-
-			console.error("[qmd-server]", {
-				command,
-				payload,
-				message: error instanceof Error ? error.message : String(error),
-				details,
-			});
 
 			return {
 				command,

@@ -33,6 +33,10 @@ const resolvedQmdDbPath = new URL(
 	import.meta.url,
 ).pathname;
 
+function detectBunRuntime(): boolean {
+	return typeof Reflect.get(globalThis, "Bun") !== "undefined";
+}
+
 const nodeCliLayer = NodeChildProcessSpawner.layer.pipe(
 	Layer.provideMerge(
 		Layer.mergeAll(
@@ -79,8 +83,18 @@ const command = Command.make(
 		),
 	},
 	Effect.fn("qmdBridgeQueryHelper")(function* (args) {
+		const bunRuntimeDetected = detectBunRuntime();
+
 		return yield* Effect.scoped(
 			Effect.gen(function* () {
+				if (bunRuntimeDetected) {
+					return yield* new QueryHelperError({
+						operation: "runtime-check",
+						message:
+							"Expected the query helper to run under Node, but Bun was detected in the runtime.",
+					});
+				}
+
 				const mode = yield* Schema.decodeUnknownEffect(SearchModeSchema)(
 					args.mode,
 				).pipe(
@@ -96,8 +110,6 @@ const command = Command.make(
 					Effect.tryPromise({
 						try: () =>
 							createStore({
-								// Resolve the database from the repo root so vector and
-								// hybrid search do not depend on the caller's cwd.
 								dbPath: resolvedQmdDbPath,
 							}),
 						catch: (error) =>
