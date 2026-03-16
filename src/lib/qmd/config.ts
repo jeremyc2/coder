@@ -12,4 +12,5 @@ export const qmdCollectionEntries = categoryDefinitions.map((category) => ({
 }));
 
 export const qmdGlobalContext =
-	"Jeremy's private markdown vault with personal notes, household admin, technical references, spiritual study, and family life.";
+	process.env["QMD_GLOBAL_CONTEXT"] ??
+	"Private markdown vault with personal notes.";

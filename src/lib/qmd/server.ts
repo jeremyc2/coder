@@ -1,7 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { Effect, Schema } from "effect";
-import { QmdBridgeError } from "../effect/services/QmdBridge";
-import { runQmdBridge } from "./bridge";
 import { categoryDefinitions } from "./categories";
 
 type SearchInput = {
@@ -100,6 +98,15 @@ class VaultRequestError extends Schema.TaggedErrorClass<VaultRequestError>()(
 	},
 ) {}
 
+function readStringProperty(value: unknown, key: string): string | undefined {
+	if (typeof value !== "object" || value === null || !(key in value)) {
+		return undefined;
+	}
+
+	const property = Reflect.get(value, key);
+	return typeof property === "string" ? property : undefined;
+}
+
 type QmdServerResult<T> =
 	| {
 			ok: true;
@@ -164,15 +171,20 @@ async function runQmdBridgeResult<
 	schema: TResultSchema,
 ): Promise<QmdServerResult<TResultSchema["Type"]>> {
 	return Effect.tryPromise({
-		try: () => runQmdBridge(command, payload, schema),
+		try: async () => {
+			const { runQmdBridge } = await import("./bridge");
+			return runQmdBridge(command, payload, schema);
+		},
 		catch: (error) => {
 			const details =
 				error instanceof Error && error.stack ? error.stack : String(error);
+			const commandName = readStringProperty(error, "command");
+			const message = readStringProperty(error, "message");
 
-			if (error instanceof QmdBridgeError) {
+			if (commandName && message) {
 				return {
-					command: error.command,
-					message: error.message,
+					command: commandName,
+					message,
 					details,
 				};
 			}

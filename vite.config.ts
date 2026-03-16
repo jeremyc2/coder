@@ -11,6 +11,9 @@ export default defineConfig({
 		port,
 		host: process.env["HOST"],
 	},
+	optimizeDeps: {
+		exclude: ["@tobilu/qmd", "node-llama-cpp", "ipull"],
+	},
 	plugins: [
 		tailwindcss(),
 		tanstackStart(),
