@@ -40,7 +40,7 @@ export const Route = createFileRoute("/")({
 
 function Home() {
 	return (
-		<main className="min-h-screen bg-background text-foreground">
+		<main className="min-h-screen bg-[#fbfafa] text-foreground">
 			<section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
 				<header className="overflow-hidden rounded-[2rem] border border-[oklch(86%_0.025_60)] bg-background shadow-sm">
 					<div className="grid gap-6 p-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)] lg:p-8">
