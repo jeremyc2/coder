@@ -1,7 +1,229 @@
-<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" rx="136" fill="#F97316"/>
-  <rect x="104" y="120" width="304" height="272" rx="72" fill="#1C1917"/>
-  <path d="M160 208C160 172.654 188.654 144 224 144H352V352C352 387.346 323.346 416 288 416H160V208Z" fill="#FFEDD5"/>
-  <path d="M232 240H296" stroke="#EA580C" stroke-width="24" stroke-linecap="round"/>
-  <path d="M232 304H272" stroke="#EA580C" stroke-width="24" stroke-linecap="round"/>
+<svg
+	width="512"
+	height="512"
+	viewBox="0 0 512 512"
+	fill="none"
+	xmlns="http://www.w3.org/2000/svg"
+>
+	<defs>
+		<radialGradient
+			id="vault-icon-background"
+			cx="0"
+			cy="0"
+			r="1"
+			gradientUnits="userSpaceOnUse"
+			gradientTransform="translate(164 126) rotate(49.3662) scale(456.991)"
+		>
+			<stop stop-color="#FFF8ED" />
+			<stop offset="0.52" stop-color="#F2DFC1" />
+			<stop offset="1" stop-color="#D49B69" />
+		</radialGradient>
+		<linearGradient
+			id="vault-icon-shell"
+			x1="100"
+			y1="92"
+			x2="414"
+			y2="428"
+			gradientUnits="userSpaceOnUse"
+		>
+			<stop stop-color="#32463B" />
+			<stop offset="1" stop-color="#18211D" />
+		</linearGradient>
+		<linearGradient
+			id="vault-icon-metal"
+			x1="136"
+			y1="132"
+			x2="382"
+			y2="380"
+			gradientUnits="userSpaceOnUse"
+		>
+			<stop stop-color="#FFD98F" />
+			<stop offset="0.54" stop-color="#E3A04D" />
+			<stop offset="1" stop-color="#A15C22" />
+		</linearGradient>
+		<linearGradient
+			id="vault-icon-paper"
+			x1="180"
+			y1="168"
+			x2="332"
+			y2="346"
+			gradientUnits="userSpaceOnUse"
+		>
+			<stop stop-color="#FFF6E8" />
+			<stop offset="1" stop-color="#F1DFC0" />
+		</linearGradient>
+		<linearGradient
+			id="vault-icon-fold"
+			x1="278"
+			y1="166"
+			x2="334"
+			y2="222"
+			gradientUnits="userSpaceOnUse"
+		>
+			<stop stop-color="#FFD297" />
+			<stop offset="1" stop-color="#E39A4F" />
+		</linearGradient>
+		<filter
+			id="vault-icon-shadow"
+			x="56"
+			y="60"
+			width="400"
+			height="404"
+			filterUnits="userSpaceOnUse"
+			color-interpolation-filters="sRGB"
+		>
+			<feFlood flood-opacity="0" result="BackgroundImageFix" />
+			<feColorMatrix
+				in="SourceAlpha"
+				type="matrix"
+				values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0"
+				result="hardAlpha"
+			/>
+			<feOffset dy="16" />
+			<feGaussianBlur stdDeviation="14" />
+			<feComposite in2="hardAlpha" operator="out" />
+			<feColorMatrix
+				type="matrix"
+				values="0 0 0 0 0.126824 0 0 0 0 0.188235 0 0 0 0 0.159216 0 0 0 0.22 0"
+			/>
+			<feBlend
+				mode="normal"
+				in2="BackgroundImageFix"
+				result="effect1_dropShadow_502_7"
+			/>
+			<feBlend
+				mode="normal"
+				in="SourceGraphic"
+				in2="effect1_dropShadow_502_7"
+				result="shape"
+			/>
+		</filter>
+		<filter
+			id="vault-icon-glow"
+			x="92"
+			y="90"
+			width="328"
+			height="332"
+			filterUnits="userSpaceOnUse"
+			color-interpolation-filters="sRGB"
+		>
+			<feFlood flood-opacity="0" result="BackgroundImageFix" />
+			<feBlend
+				mode="normal"
+				in="SourceGraphic"
+				in2="BackgroundImageFix"
+				result="shape"
+			/>
+			<feGaussianBlur stdDeviation="18" result="effect1_foregroundBlur_502_7" />
+		</filter>
+	</defs>
+	<rect width="512" height="512" rx="136" fill="url(#vault-icon-background)" />
+	<circle cx="154" cy="124" r="92" fill="#FFF8EC" fill-opacity="0.46" />
+	<circle
+		cx="378"
+		cy="390"
+		r="88"
+		fill="#A55E23"
+		fill-opacity="0.08"
+	/>
+	<rect
+		x="24"
+		y="24"
+		width="464"
+		height="464"
+		rx="112"
+		stroke="#FFF6E8"
+		stroke-opacity="0.7"
+		stroke-width="4"
+	/>
+	<g filter="url(#vault-icon-shadow)">
+		<rect
+			x="84"
+			y="84"
+			width="344"
+			height="344"
+			rx="104"
+			fill="url(#vault-icon-shell)"
+		/>
+		<rect
+			x="98"
+			y="98"
+			width="316"
+			height="316"
+			rx="90"
+			stroke="#4B6358"
+			stroke-opacity="0.45"
+			stroke-width="4"
+		/>
+		<circle cx="256" cy="256" r="124" fill="#12201A" />
+		<circle
+			cx="256"
+			cy="256"
+			r="126"
+			stroke="url(#vault-icon-metal)"
+			stroke-width="34"
+		/>
+		<circle
+			cx="256"
+			cy="256"
+			r="101"
+			stroke="#FFE7B5"
+			stroke-opacity="0.38"
+			stroke-width="3"
+		/>
+		<g fill="url(#vault-icon-metal)">
+			<circle cx="256" cy="138" r="16" />
+			<circle cx="374" cy="256" r="16" />
+			<circle cx="256" cy="374" r="16" />
+			<circle cx="138" cy="256" r="16" />
+		</g>
+		<g fill="#D9903D">
+			<rect x="242" y="158" width="28" height="70" rx="14" />
+			<rect x="242" y="284" width="28" height="70" rx="14" />
+			<rect x="158" y="242" width="70" height="28" rx="14" />
+			<rect x="284" y="242" width="70" height="28" rx="14" />
+		</g>
+		<g filter="url(#vault-icon-glow)">
+			<circle
+				cx="258"
+				cy="255"
+				r="82"
+				fill="#FFF6E8"
+				fill-opacity="0.12"
+			/>
+		</g>
+		<path
+			d="M204 168H284L332 216V312C332 331.882 315.882 348 296 348H204C184.118 348 168 331.882 168 312V204C168 184.118 184.118 168 204 168Z"
+			fill="url(#vault-icon-paper)"
+		/>
+		<path
+			d="M284 168V194C284 210.569 297.431 224 314 224H332L284 168Z"
+			fill="url(#vault-icon-fold)"
+		/>
+		<rect
+			x="203"
+			y="236"
+			width="94"
+			height="18"
+			rx="9"
+			fill="#C47C31"
+		/>
+		<rect
+			x="203"
+			y="270"
+			width="70"
+			height="18"
+			rx="9"
+			fill="#D09149"
+		/>
+		<rect
+			x="203"
+			y="304"
+			width="118"
+			height="18"
+			rx="9"
+			fill="#2B3C33"
+			fill-opacity="0.2"
+		/>
+	</g>
 </svg>

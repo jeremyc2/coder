@@ -54,7 +54,7 @@ export const Route = createRootRoute({
 			{
 				rel: "mask-icon",
 				href: "/mask-icon.svg",
-				color: "#f97316",
+				color: "#1f312a",
 			},
 			{
 				rel: "apple-touch-icon",

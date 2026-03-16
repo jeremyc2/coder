@@ -26,8 +26,8 @@ export default defineConfig({
 				short_name: "Vault",
 				description:
 					"A private stash for useful things you were never supposed to lose.",
-				theme_color: "#f97316",
-				background_color: "#f97316",
+				theme_color: "#fbfafa",
+				background_color: "#fbfafa",
 				display: "fullscreen",
 				scope: "/",
 				start_url: "/",
