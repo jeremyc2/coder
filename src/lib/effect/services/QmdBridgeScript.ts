@@ -1,7 +1,7 @@
-import { accessSync, constants, realpathSync } from "node:fs";
-import { delimiter, join } from "node:path";
 import { createStore, type QMDStore } from "@tobilu/qmd";
 import { Effect, Layer, Schema, ServiceMap, Stream } from "effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner";
 import { simplifyContext, stripFrontmatter } from "../../qmd/bridgeUtils";
@@ -17,6 +17,7 @@ const queryHelperScript = new URL(
 ).pathname;
 const workspaceRoot = new URL("../../../../", import.meta.url).pathname;
 const explicitNodeBinary = process.env["QMD_NODE_BINARY"];
+const pathDelimiter = process.platform === "win32" ? ";" : ":";
 
 const QueryHelperResultsSchema = Schema.fromJsonString(
 	Schema.Array(
@@ -39,15 +40,6 @@ export class BridgeStoreError extends Schema.TaggedErrorClass<BridgeStoreError>(
 	},
 ) {}
 
-function isExecutableFile(pathLike: string): boolean {
-	try {
-		accessSync(pathLike, constants.X_OK);
-		return true;
-	} catch {
-		return false;
-	}
-}
-
 function isBunBackedBinary(pathLike: string): boolean {
 	return (
 		pathLike.endsWith("/bun") ||
@@ -56,41 +48,6 @@ function isBunBackedBinary(pathLike: string): boolean {
 	);
 }
 
-function resolveNodeBinaryPath(): string | undefined {
-	if (explicitNodeBinary && isExecutableFile(explicitNodeBinary)) {
-		const resolvedExplicitBinary = realpathSync(explicitNodeBinary);
-
-		if (!isBunBackedBinary(resolvedExplicitBinary)) {
-			return resolvedExplicitBinary;
-		}
-	}
-
-	const pathValue = process.env["PATH"];
-
-	if (!pathValue) {
-		return undefined;
-	}
-
-	for (const segment of pathValue.split(delimiter)) {
-		if (!segment) {
-			continue;
-		}
-
-		const candidate = join(segment, "node");
-
-		if (isExecutableFile(candidate)) {
-			const resolvedCandidate = realpathSync(candidate);
-
-			if (isBunBackedBinary(resolvedCandidate)) {
-				continue;
-			}
-
-			return resolvedCandidate;
-		}
-	}
-
-	return undefined;
-}
 export type BridgeOverviewArgs = {
 	limitPerCollection: number;
 };
@@ -153,7 +110,112 @@ export class QmdBridgeScript extends ServiceMap.Service<
 		QmdBridgeScript,
 		Effect.gen(function* () {
 			const spawner = yield* ChildProcessSpawner;
-			const nodeBinaryPath = resolveNodeBinaryPath();
+			const fs = yield* FileSystem.FileSystem;
+			const path = yield* Path.Path;
+
+			const resolveRealPath = Effect.fn("QmdBridgeScript.resolveRealPath")(
+				function* (
+					operation: string,
+					pathLike: string,
+				): Effect.fn.Return<string, BridgeStoreError> {
+					return yield* fs.realPath(pathLike).pipe(
+						Effect.mapError(
+							(error) =>
+								new BridgeStoreError({
+									operation,
+									message: String(error),
+								}),
+						),
+					);
+				},
+			);
+
+			const isExecutableFile = Effect.fn("QmdBridgeScript.isExecutableFile")(
+				function* (
+					pathLike: string,
+				): Effect.fn.Return<boolean, BridgeStoreError> {
+					const pathExists = yield* fs.exists(pathLike).pipe(
+						Effect.mapError(
+							(error) =>
+								new BridgeStoreError({
+									operation: "resolve-node-binary-exists",
+									message: String(error),
+								}),
+						),
+					);
+
+					if (!pathExists) {
+						return false;
+					}
+
+					const stats = yield* fs.stat(pathLike).pipe(
+						Effect.mapError(
+							(error) =>
+								new BridgeStoreError({
+									operation: "resolve-node-binary-stat",
+									message: String(error),
+								}),
+						),
+					);
+
+					// Check if the file is executable
+					return stats.type === "File" && (stats.mode & 0o111) !== 0;
+				},
+			);
+
+			const resolveNodeBinaryPath = Effect.fn(
+				"QmdBridgeScript.resolveNodeBinaryPath",
+			)(function* (): Effect.fn.Return<string | undefined, BridgeStoreError> {
+				if (explicitNodeBinary) {
+					const explicitBinaryIsExecutable =
+						yield* isExecutableFile(explicitNodeBinary);
+
+					if (explicitBinaryIsExecutable) {
+						const resolvedExplicitBinary = yield* resolveRealPath(
+							"resolve-node-binary-realpath-explicit",
+							explicitNodeBinary,
+						);
+
+						if (!isBunBackedBinary(resolvedExplicitBinary)) {
+							return resolvedExplicitBinary;
+						}
+					}
+				}
+
+				const pathValue = process.env["PATH"];
+
+				if (!pathValue) {
+					return undefined;
+				}
+
+				for (const segment of pathValue.split(pathDelimiter)) {
+					if (!segment) {
+						continue;
+					}
+
+					const candidate = path.join(segment, "node");
+					const candidateIsExecutable = yield* isExecutableFile(candidate);
+
+					if (!candidateIsExecutable) {
+						continue;
+					}
+
+					const resolvedCandidate = yield* resolveRealPath(
+						"resolve-node-binary-realpath-path",
+						candidate,
+					);
+
+					if (isBunBackedBinary(resolvedCandidate)) {
+						continue;
+					}
+
+					return resolvedCandidate;
+				}
+
+				return undefined;
+			});
+
+			const nodeBinaryPath = yield* resolveNodeBinaryPath();
 
 			const withStore = Effect.fn("QmdBridgeScript.withStore")(function* <T>(
 				fn: (store: QMDStore) => Effect.Effect<T, BridgeStoreError>,
