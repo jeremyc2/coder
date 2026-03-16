@@ -249,6 +249,7 @@ function SearchRoute() {
 	function updateSearch(nextDraft: SearchDraft, docid = "") {
 		startTransition(() => {
 			void navigate({
+				resetScroll: false,
 				search: {
 					query: nextDraft.query.trim(),
 					collection: nextDraft.collection,
