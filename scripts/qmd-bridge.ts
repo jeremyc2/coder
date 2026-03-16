@@ -157,6 +157,37 @@ const query = Command.make(
 	),
 );
 
+const browse = Command.make(
+	"browse",
+	{
+		collection: Flag.optional(
+			Flag.string("collection").pipe(
+				Flag.withDescription(
+					"Optional collection name to scope the browse view",
+				),
+			),
+		),
+		limit: Flag.integer("limit").pipe(
+			Flag.withDefault(24),
+			Flag.withDescription("Maximum number of notes to return"),
+		),
+	},
+	Effect.fn("qmdBridgeBrowse")(function* (args) {
+		const bridge = yield* QmdBridgeScript;
+		const output = yield* bridge.browse({
+			collection: Option.getOrUndefined(args.collection),
+			limit: args.limit,
+		});
+		yield* Effect.sync(() => {
+			process.stdout.write(JSON.stringify(output));
+		});
+	}),
+).pipe(
+	Command.withDescription(
+		"List recent notes across the vault or a collection.",
+	),
+);
+
 // `get` retrieves a single note by docid, which is the follow-up step after
 // either lexical `search` or hybrid `query`.
 const getDocument = Command.make(
@@ -201,6 +232,7 @@ const command = Command.make("qmd-bridge").pipe(
 		search,
 		vsearch,
 		query,
+		browse,
 		getDocument,
 		sync,
 	]),

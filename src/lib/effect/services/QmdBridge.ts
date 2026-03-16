@@ -16,6 +16,43 @@ export class QmdBridgeError extends Schema.TaggedErrorClass<QmdBridgeError>()(
 	},
 ) {}
 
+function readStringProperty(value: unknown, key: string): string | undefined {
+	if (typeof value !== "object" || value === null || !(key in value)) {
+		return undefined;
+	}
+
+	const property = Reflect.get(value, key);
+	return typeof property === "string" ? property : undefined;
+}
+
+function describeUnknownError(error: unknown): string {
+	const message =
+		readStringProperty(error, "message") ??
+		readStringProperty(error, "cause") ??
+		(error instanceof Error ? error.message : undefined);
+
+	if (message) {
+		const operation = readStringProperty(error, "operation");
+		const tag = readStringProperty(error, "_tag");
+
+		if (operation && tag) {
+			return `${tag} (${operation}): ${message}`;
+		}
+
+		if (operation) {
+			return `${operation}: ${message}`;
+		}
+
+		if (tag) {
+			return `${tag}: ${message}`;
+		}
+
+		return message;
+	}
+
+	return String(error);
+}
+
 /**
  * Runs the QMD bridge process through Effect's child-process abstractions and
  * decodes structured JSON responses for callers.
@@ -42,6 +79,11 @@ const QueryPayloadSchema = Schema.Struct({
 	limit: Schema.optional(Schema.Number),
 	minScore: Schema.optional(Schema.Number),
 	explain: Schema.optional(Schema.Boolean),
+});
+
+const BrowsePayloadSchema = Schema.Struct({
+	collection: Schema.optional(Schema.String),
+	limit: Schema.optional(Schema.Number),
 });
 
 const GetPayloadSchema = Schema.Struct({
@@ -85,7 +127,7 @@ export class QmdBridge extends ServiceMap.Service<
 						(error) =>
 							new QmdBridgeError({
 								command,
-								message: String(error),
+								message: describeUnknownError(error),
 							}),
 					),
 				);
@@ -182,6 +224,22 @@ export class QmdBridge extends ServiceMap.Service<
 							return args;
 						}
 
+						case "browse": {
+							const decodedPayload = yield* decodePayload(
+								command,
+								payload,
+								BrowsePayloadSchema,
+							);
+							const args = [bridgeScript, "browse"];
+							if (decodedPayload.collection) {
+								args.push("--collection", decodedPayload.collection);
+							}
+							if (decodedPayload.limit !== undefined) {
+								args.push("--limit", String(decodedPayload.limit));
+							}
+							return args;
+						}
+
 						case "get": {
 							const decodedPayload = yield* decodePayload(
 								command,
@@ -266,7 +324,7 @@ export class QmdBridge extends ServiceMap.Service<
 							(error) =>
 								new QmdBridgeError({
 									command,
-									message: String(error),
+									message: describeUnknownError(error),
 								}),
 						),
 					),
@@ -284,7 +342,7 @@ export class QmdBridge extends ServiceMap.Service<
 						(error) =>
 							new QmdBridgeError({
 								command,
-								message: String(error),
+								message: describeUnknownError(error),
 							}),
 					),
 				);

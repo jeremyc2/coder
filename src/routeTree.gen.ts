@@ -9,10 +9,40 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SearchTwoRouteImport } from './routes/search-two'
+import { Route as SearchThreeRouteImport } from './routes/search-three'
+import { Route as SearchOneRouteImport } from './routes/search-one'
+import { Route as SearchFourRouteImport } from './routes/search-four'
+import { Route as SearchFiveRouteImport } from './routes/search-five'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as IndexRouteImport } from './routes/index'
 
+const SearchTwoRoute = SearchTwoRouteImport.update({
+  id: '/search-two',
+  path: '/search-two',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchThreeRoute = SearchThreeRouteImport.update({
+  id: '/search-three',
+  path: '/search-three',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchOneRoute = SearchOneRouteImport.update({
+  id: '/search-one',
+  path: '/search-one',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchFourRoute = SearchFourRouteImport.update({
+  id: '/search-four',
+  path: '/search-four',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchFiveRoute = SearchFiveRouteImport.update({
+  id: '/search-five',
+  path: '/search-five',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
   path: '/search',
@@ -33,34 +63,114 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
   '/search': typeof SearchRoute
+  '/search-five': typeof SearchFiveRoute
+  '/search-four': typeof SearchFourRoute
+  '/search-one': typeof SearchOneRoute
+  '/search-three': typeof SearchThreeRoute
+  '/search-two': typeof SearchTwoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
   '/search': typeof SearchRoute
+  '/search-five': typeof SearchFiveRoute
+  '/search-four': typeof SearchFourRoute
+  '/search-one': typeof SearchOneRoute
+  '/search-three': typeof SearchThreeRoute
+  '/search-two': typeof SearchTwoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
   '/search': typeof SearchRoute
+  '/search-five': typeof SearchFiveRoute
+  '/search-four': typeof SearchFourRoute
+  '/search-one': typeof SearchOneRoute
+  '/search-three': typeof SearchThreeRoute
+  '/search-two': typeof SearchTwoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/health' | '/search'
+  fullPaths:
+    | '/'
+    | '/health'
+    | '/search'
+    | '/search-five'
+    | '/search-four'
+    | '/search-one'
+    | '/search-three'
+    | '/search-two'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/health' | '/search'
-  id: '__root__' | '/' | '/health' | '/search'
+  to:
+    | '/'
+    | '/health'
+    | '/search'
+    | '/search-five'
+    | '/search-four'
+    | '/search-one'
+    | '/search-three'
+    | '/search-two'
+  id:
+    | '__root__'
+    | '/'
+    | '/health'
+    | '/search'
+    | '/search-five'
+    | '/search-four'
+    | '/search-one'
+    | '/search-three'
+    | '/search-two'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HealthRoute: typeof HealthRoute
   SearchRoute: typeof SearchRoute
+  SearchFiveRoute: typeof SearchFiveRoute
+  SearchFourRoute: typeof SearchFourRoute
+  SearchOneRoute: typeof SearchOneRoute
+  SearchThreeRoute: typeof SearchThreeRoute
+  SearchTwoRoute: typeof SearchTwoRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/search-two': {
+      id: '/search-two'
+      path: '/search-two'
+      fullPath: '/search-two'
+      preLoaderRoute: typeof SearchTwoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search-three': {
+      id: '/search-three'
+      path: '/search-three'
+      fullPath: '/search-three'
+      preLoaderRoute: typeof SearchThreeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search-one': {
+      id: '/search-one'
+      path: '/search-one'
+      fullPath: '/search-one'
+      preLoaderRoute: typeof SearchOneRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search-four': {
+      id: '/search-four'
+      path: '/search-four'
+      fullPath: '/search-four'
+      preLoaderRoute: typeof SearchFourRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search-five': {
+      id: '/search-five'
+      path: '/search-five'
+      fullPath: '/search-five'
+      preLoaderRoute: typeof SearchFiveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/search': {
       id: '/search'
       path: '/search'
@@ -89,6 +199,11 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HealthRoute: HealthRoute,
   SearchRoute: SearchRoute,
+  SearchFiveRoute: SearchFiveRoute,
+  SearchFourRoute: SearchFourRoute,
+  SearchOneRoute: SearchOneRoute,
+  SearchThreeRoute: SearchThreeRoute,
+  SearchTwoRoute: SearchTwoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

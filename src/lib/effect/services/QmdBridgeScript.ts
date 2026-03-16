@@ -13,6 +13,7 @@ const queryHelperScript = new URL(
 	"../../../../scripts/qmd-bridge-query.ts",
 	import.meta.url,
 ).pathname;
+const workspaceRoot = new URL("../../../../", import.meta.url).pathname;
 
 const QueryHelperResultsSchema = Schema.fromJsonString(
 	Schema.Array(
@@ -59,6 +60,11 @@ export type BridgeQueryArgs = {
 	explain: boolean;
 };
 
+export type BridgeBrowseArgs = {
+	collection?: string;
+	limit: number;
+};
+
 export type BridgeGetArgs = {
 	docid: string;
 };
@@ -83,6 +89,7 @@ export class QmdBridgeScript extends ServiceMap.Service<
 			args: BridgeVectorSearchArgs,
 		): Effect.Effect<unknown, BridgeStoreError>;
 		query(args: BridgeQueryArgs): Effect.Effect<unknown, BridgeStoreError>;
+		browse(args: BridgeBrowseArgs): Effect.Effect<unknown, BridgeStoreError>;
 		getDocument(args: BridgeGetArgs): Effect.Effect<unknown, BridgeStoreError>;
 		sync(args: BridgeSyncArgs): Effect.Effect<unknown, BridgeStoreError>;
 	}
@@ -299,7 +306,7 @@ export class QmdBridgeScript extends ServiceMap.Service<
 					Effect.gen(function* () {
 						const child = yield* spawner.spawn(
 							ChildProcess.make("node", commandArgs, {
-								cwd: process.cwd(),
+								cwd: workspaceRoot,
 							}),
 						);
 
@@ -334,7 +341,7 @@ export class QmdBridgeScript extends ServiceMap.Service<
 						operation: mode,
 						message:
 							stderr.trim() ||
-							`qmd ${mode} helper exited with code ${exitCode}`,
+							`qmd ${mode} helper exited with code ${exitCode} (cwd: ${workspaceRoot})`,
 					});
 				}
 
@@ -365,6 +372,69 @@ export class QmdBridgeScript extends ServiceMap.Service<
 				args: BridgeVectorSearchArgs,
 			): Effect.fn.Return<unknown, BridgeStoreError> {
 				return yield* runNodeBackedSearch("vsearch", args);
+			});
+
+			const browse = Effect.fn("QmdBridgeScript.browse")(function* (
+				args: BridgeBrowseArgs,
+			): Effect.fn.Return<unknown, BridgeStoreError> {
+				return yield* withStore(
+					Effect.fn("QmdBridgeScript.browse.withStore")(function* (store) {
+						const documents = yield* Effect.try({
+							try: () => {
+								if (args.collection) {
+									return store.internal.db
+										.prepare(
+											`
+                SELECT
+                  collection AS collectionName,
+                  path,
+                  title,
+                  substr(hash, 1, 6) AS docid,
+                  modified_at AS modifiedAt
+                FROM documents
+                WHERE active = 1
+                  AND collection = ?
+                ORDER BY modified_at DESC, title ASC
+                LIMIT ?
+              `,
+										)
+										.all(args.collection, args.limit);
+								}
+
+								return store.internal.db
+									.prepare(
+										`
+              SELECT
+                collection AS collectionName,
+                path,
+                title,
+                substr(hash, 1, 6) AS docid,
+                modified_at AS modifiedAt
+              FROM documents
+              WHERE active = 1
+              ORDER BY modified_at DESC, title ASC
+              LIMIT ?
+            `,
+									)
+									.all(args.limit);
+							},
+							catch: (error) =>
+								new BridgeStoreError({
+									operation: "browse",
+									message:
+										error instanceof Error ? error.message : String(error),
+								}),
+						});
+
+						return documents.map((document) => ({
+							collectionName: document.collectionName,
+							displayPath: document.path,
+							title: document.title,
+							docid: document.docid,
+							modifiedAt: document.modifiedAt,
+						}));
+					}),
+				);
 			});
 
 			const getDocument = Effect.fn("QmdBridgeScript.getDocument")(function* (
@@ -461,6 +531,7 @@ export class QmdBridgeScript extends ServiceMap.Service<
 				search,
 				vsearch,
 				query,
+				browse,
 				getDocument,
 				sync,
 			});

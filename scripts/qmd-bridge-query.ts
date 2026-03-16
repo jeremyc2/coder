@@ -28,6 +28,10 @@ class QueryHelperError extends Schema.TaggedErrorClass<QueryHelperError>()(
 
 const VERSION = "0.0.1";
 const SearchModeSchema = Schema.Literals(["vsearch", "query"]);
+const resolvedQmdDbPath = new URL(
+	"../private/qmd/index.sqlite",
+	import.meta.url,
+).pathname;
 
 const nodeCliLayer = NodeChildProcessSpawner.layer.pipe(
 	Layer.provideMerge(
@@ -92,12 +96,17 @@ const command = Command.make(
 					Effect.tryPromise({
 						try: () =>
 							createStore({
-								dbPath: "private/qmd/index.sqlite",
+								// Resolve the database from the repo root so vector and
+								// hybrid search do not depend on the caller's cwd.
+								dbPath: resolvedQmdDbPath,
 							}),
 						catch: (error) =>
 							new QueryHelperError({
 								operation: "create-store",
-								message: error instanceof Error ? error.message : String(error),
+								message:
+									error instanceof Error
+										? `${error.message} (cwd: ${process.cwd()}, dbPath: ${resolvedQmdDbPath})`
+										: String(error),
 							}),
 					}),
 					(store) =>

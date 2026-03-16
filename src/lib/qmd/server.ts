@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { Effect, Schema } from "effect";
+import { QmdBridgeError } from "../effect/services/QmdBridge";
 import { runQmdBridge } from "./bridge";
 import { categoryDefinitions } from "./categories";
 
@@ -8,10 +9,17 @@ type SearchInput = {
 	collection?: string;
 	limit?: number;
 	mode?: "search" | "vsearch" | "query";
+	minScore?: number;
+	explain?: boolean;
 };
 
 type DocumentInput = {
 	docid: string;
+};
+
+type BrowseInput = {
+	collection?: string;
+	limit?: number;
 };
 
 const VaultOverviewSchema = Schema.Struct({
@@ -73,12 +81,38 @@ const VaultDocumentSchema = Schema.Union([
 	}),
 ]);
 
+const VaultBrowseResultSchema = Schema.mutable(
+	Schema.Array(
+		Schema.Struct({
+			collectionName: Schema.String,
+			displayPath: Schema.String,
+			title: Schema.String,
+			docid: Schema.String,
+			modifiedAt: Schema.String,
+		}),
+	),
+);
+
 class VaultRequestError extends Schema.TaggedErrorClass<VaultRequestError>()(
 	"VaultRequestError",
 	{
 		message: Schema.String,
 	},
 ) {}
+
+type QmdServerResult<T> =
+	| {
+			ok: true;
+			data: T;
+	  }
+	| {
+			ok: false;
+			error: {
+				command: string;
+				message: string;
+				details: string;
+			};
+	  };
 
 function parseSearchInput(input: SearchInput | undefined) {
 	const query = input?.query?.trim();
@@ -89,6 +123,20 @@ function parseSearchInput(input: SearchInput | undefined) {
 		collection: collection ? collection : undefined,
 		limit: Math.min(Math.max(input?.limit ?? 12, 1), 24),
 		mode: input?.mode ?? "search",
+		minScore:
+			typeof input?.minScore === "number" && Number.isFinite(input.minScore)
+				? input.minScore
+				: undefined,
+		explain: input?.explain === true,
+	};
+}
+
+function parseBrowseInput(input: BrowseInput | undefined) {
+	const collection = input?.collection?.trim();
+
+	return {
+		collection: collection ? collection : undefined,
+		limit: Math.min(Math.max(input?.limit ?? 24, 1), 50),
 	};
 }
 
@@ -107,15 +155,79 @@ const parseDocumentInput = Effect.fn("parseDocumentInput")(function* (
 	};
 });
 
+async function runQmdBridgeResult<
+	TPayload,
+	TResultSchema extends Schema.Top & { readonly DecodingServices: never },
+>(
+	command: string,
+	payload: TPayload,
+	schema: TResultSchema,
+): Promise<QmdServerResult<TResultSchema["Type"]>> {
+	return Effect.tryPromise({
+		try: () => runQmdBridge(command, payload, schema),
+		catch: (error) => {
+			const details =
+				error instanceof Error && error.stack ? error.stack : String(error);
+
+			if (error instanceof QmdBridgeError) {
+				console.error("[qmd-server]", {
+					command: error.command,
+					payload,
+					message: error.message,
+					details,
+				});
+
+				return {
+					command: error.command,
+					message: error.message,
+					details,
+				};
+			}
+
+			console.error("[qmd-server]", {
+				command,
+				payload,
+				message: error instanceof Error ? error.message : String(error),
+				details,
+			});
+
+			return {
+				command,
+				message: error instanceof Error ? error.message : String(error),
+				details,
+			};
+		},
+	}).pipe(
+		Effect.match({
+			onFailure: (error) => ({
+				ok: false as const,
+				error,
+			}),
+			onSuccess: (data) => ({
+				ok: true as const,
+				data,
+			}),
+		}),
+		Effect.runPromise,
+	);
+}
+
 export const getVaultOverview = createServerFn({ method: "GET" }).handler(
 	async () => {
-		const { status, collections, latestDocuments } = await runQmdBridge(
+		const result = await runQmdBridgeResult(
 			"overview",
 			{ limitPerCollection: 10 },
 			VaultOverviewSchema,
 		);
 
+		if (!result.ok) {
+			return result;
+		}
+
+		const { status, collections, latestDocuments } = result.data;
+
 		return {
+			ok: true as const,
 			status,
 			categories: categoryDefinitions,
 			collections: collections.map((collection) => ({
@@ -136,17 +248,35 @@ export const searchVaultNotes = createServerFn({ method: "GET" })
 	.inputValidator(parseSearchInput)
 	.handler(async ({ data }) => {
 		if (!data.query) {
-			return [];
+			return {
+				ok: true as const,
+				data: [],
+			};
 		}
 
-		return runQmdBridge(
+		return runQmdBridgeResult(
 			data.mode,
 			{
 				query: data.query,
 				collection: data.collection,
 				limit: data.limit,
+				minScore: data.minScore,
+				explain: data.explain,
 			},
 			VaultSearchResultSchema,
+		);
+	});
+
+export const browseVaultNotes = createServerFn({ method: "GET" })
+	.inputValidator(parseBrowseInput)
+	.handler(async ({ data }) => {
+		return runQmdBridgeResult(
+			"browse",
+			{
+				collection: data.collection,
+				limit: data.limit,
+			},
+			VaultBrowseResultSchema,
 		);
 	});
 
@@ -154,7 +284,7 @@ export const getVaultDocument = createServerFn({ method: "GET" })
 	.inputValidator((input: DocumentInput | undefined) => input)
 	.handler(async ({ data }) => {
 		const documentInput = await Effect.runPromise(parseDocumentInput(data));
-		return runQmdBridge(
+		return runQmdBridgeResult(
 			"get",
 			{ docid: documentInput.docid },
 			VaultDocumentSchema,
