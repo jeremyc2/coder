@@ -1,5 +1,6 @@
 {
 	"typescript.experimental.useTsgo": true,
+	"typescript.native-preview.tsdk": "node_modules/@typescript/native-preview",
 	"editor.formatOnSave": true,
 	"editor.codeActionsOnSave": {
 		"source.fixAll.biome": "explicit",
@@ -16,6 +17,5 @@
 	"search.exclude": {
 		"**/routeTree.gen.ts": true
 	},
-	"typescript.enablePromptUseWorkspaceTsdk": true,
-	"typescript.native-preview.tsdk": "node_modules/@typescript/native-preview"
+	"typescript.enablePromptUseWorkspaceTsdk": true
 }
